@@ -3,6 +3,10 @@
  * Module dependencies.
  */
 
+var fs = require('fs');
+var accessLogfile = fs.createWriteStream('./log/access.log', {flags: 'a'});
+var errorLogfile = fs.createWriteStream('./log/error.log', {flags: 'a'});
+
 var express = require('express')
   , routes = require('./routes')
   , user = require('./routes/user')
@@ -13,7 +17,8 @@ var express = require('express')
   , settings = require('./settings')
   , flash = require('connect-flash')
   , mongoose = require('mongoose')
-  , settings = require('./settings');
+  , settings = require('./settings')
+  , expressError = require('express-error');
 
 var connect_str = 'mongodb://'+settings.host+'/'+settings.db;
 mongoose.connect(connect_str);
@@ -21,6 +26,8 @@ mongoose.connect(connect_str);
 var app = express();
 
 // all environments
+app.use(express.logger({stream: accessLogfile}));
+
 app.set('port', process.env.PORT || 3000);
 app.set('views', __dirname + '/views');
 app.set('view engine', 'ejs');
@@ -51,11 +58,19 @@ app.use(function(req, res, next){
 // development only
 if ('development' == app.get('env')) {
   app.use(express.errorHandler({ dumpExceptions: true, showStack: true }));
+  app.use(expressError.express3({contextLinesCount: 3, handleUncaughtException: true}));
 }
+
 
 app.use(app.router);
 //app.use(express.router(routes));
 routes(app);
+
+app.use(function (err, req, res, next) {
+  var meta = '[' + new Date() + '] ' + req.url + '\n';
+  errorLogfile.write(meta + err.stack + '\n');
+  next();
+});
 
 /*
 app.get('/', routes.index);
